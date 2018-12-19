@@ -1,0 +1,11 @@
+# definitions for all colors used in the game
+
+BLACK = (0,     0,   0)
+WHITE = (255, 255, 255)
+GREY  = (100, 100, 100)
+RED   = (255,   0,   0)
+GREEN = (  0, 255,   0)
+BLUE  = (  0,   0, 255)
+
+# background
+DEFAULT_BG = GREY
