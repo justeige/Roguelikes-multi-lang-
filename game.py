@@ -1,3 +1,4 @@
+from enum import Enum
 import libtcodpy as libtcod
 import pygame
 
@@ -20,15 +21,24 @@ def create_map():
 
     return new_map
 
-
+class Strategy:
+    '''
+    This is an ememies strategy/AI for walking, attacking etc.
+    '''
+    def take_turn(self):
+        self.owner.move(-1, 0)
 
 class Actor:
-    def __init__(self, x, y, sprite, surface, current_map):
+    def __init__(self, x, y, sprite, surface, current_map, strategy = None):
         self.x = x
         self.y = y
         self.sprite = sprite
         self.surface = surface
         self.current_map = current_map
+        self.strategy = strategy
+
+        if strategy:
+            strategy.owner = self
 
     def draw(self):
         self.surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
@@ -38,6 +48,17 @@ class Actor:
             self.x += dx
             self.y += dy
     
+
+class Creature:
+    def __init__(self, name, hp = 10):
+        self.name = name 
+        self.hp = hp
+
+
+class PlayerAction(Enum):
+    Idle = 0
+    Quit = 1
+    Move = 2
 
 class Game:
     def __init__(self, w, h):
@@ -52,57 +73,94 @@ class Game:
         self.PLAYER_S = pygame.image.load("player.png")
         self.WALL_S = pygame.image.load("wall.png")
         self.FLOOR_S = pygame.image.load("floor.png")
+        self.ENEMY_S = pygame.image.load("enemy.png")
 
         # create entities
+        strat_test = Strategy()
+
         self.player = Actor(0, 0, self.PLAYER_S, self.surface, self.current_map)
+        self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, strat_test)
+
+        # create a list of all entities
+        self.entities = [self.player, self.enemy]
 
         pygame.init()
 
+   
+    
     def draw(self):
 
         self.surface.fill(color.DEFAULT_BG)
    
+        self.draw_map()
+    
+        for e in self.entities:
+            e.draw()
+    
+        pygame.display.flip() # update pygame's display
+
+
+    def draw_map(self):
         for x in range(0, 20):
             for y in range(0, 20):
                 if self.current_map[x][y].is_walkable == True:
                     self.surface.blit(self.FLOOR_S, (x * CELL_W, y * CELL_H))                    
                 else:
                     self.surface.blit(self.WALL_S, (x * CELL_W, y * CELL_H))
-    
-        self.player.draw()
-    
-        pygame.display.flip() # update pygame's display
+   
+
+    def process_input(self):
+
+        events = pygame.event.get()
+
+        for event in events:
+
+            # quit by pressing x on the window
+            if event.type == pygame.QUIT:
+                return PlayerAction.Quit
+
+            if event.type == pygame.KEYDOWN:
+
+                # alternative way of shutdown
+                if event.key == pygame.K_ESCAPE:
+                    return PlayerAction.Quit
+
+                # movement
+                if event.key == pygame.K_UP:
+                    self.player.move(0, -1)
+                    return PlayerAction.Move
+
+                if event.key == pygame.K_DOWN:
+                    self.player.move(0, 1)
+                    return PlayerAction.Move
+
+                if event.key == pygame.K_LEFT:
+                    self.player.move(-1, 0)
+                    return PlayerAction.Move
+
+                if event.key == pygame.K_RIGHT:
+                    self.player.move(1, 0)
+                    return PlayerAction.Move
+            
+        # no specific key was struck - do nothing
+        return PlayerAction.Idle
+
 
 
     def main_loop(self):
 
         while self.is_running:
 
-            # fetch input
-            events = pygame.event.get()
+            player_action = self.process_input()
+           
+            if player_action == PlayerAction.Quit:
+                self.is_running = False
 
-            # process input
-            for event in events:
-                if event.type == pygame.QUIT:
-                    self.is_running = False
+            if player_action != PlayerAction.Idle:
+                for e in self.entities:
+                    if e.strategy:
+                        e.strategy.take_turn()
 
-                if event.type == pygame.KEYDOWN:
-
-                    # alternative way of shutdown
-                    if event.key == pygame.K_ESCAPE:
-                        self.is_running = False
-                        continue
-
-                    if event.key == pygame.K_UP:
-                        self.player.move(0, -1)
-                    if event.key == pygame.K_DOWN:
-                        self.player.move(0, 1)
-                    if event.key == pygame.K_LEFT:
-                        self.player.move(-1, 0)
-                    if event.key == pygame.K_RIGHT:
-                        self.player.move(1, 0)
-
-            # draw game
             self.draw()
     
         pygame.quit()
