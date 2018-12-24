@@ -7,7 +7,11 @@ import color
 
 CELL_W = 32
 CELL_H = 32
+MAP_X = 30
+MAP_Y = 30
 
+def random_move(step = 1):
+    return (libtcod.random_get_int(0, -step, step), libtcod.random_get_int(0, -step, step))
 
 
 class Tile:
@@ -15,9 +19,18 @@ class Tile:
         self.is_walkable = is_walkable
 
 def create_map():
-    new_map = [[ Tile(True) for y in range(0, 20)] for x in range(0, 20)]
+    new_map = [[ Tile(True) for y in range(0, MAP_Y)] for x in range(0, MAP_X)]
     new_map[10][10].is_walkable = False
     new_map[10][15].is_walkable = False
+
+    # create a border around a screen
+    for x in range(MAP_X):
+        new_map[x][0].is_walkable = False
+        new_map[x][MAP_Y - 1].is_walkable = False
+
+    for y in range(MAP_Y):
+        new_map[0][y].is_walkable = False
+        new_map[MAP_X - 1][y].is_walkable = False
 
     return new_map
 
@@ -26,7 +39,9 @@ class Strategy:
     This is an ememies strategy/AI for walking, attacking etc.
     '''
     def take_turn(self):
-        self.owner.move(-1, 0)
+        #x, y = random_move()
+        #self.owner.move(x, y)
+        pass
 
 class Actor:
     def __init__(self, x, y, sprite, surface, current_map, strategy = None):
@@ -43,10 +58,22 @@ class Actor:
     def draw(self):
         self.surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
 
-    def move(self, dx, dy):
-        if self.current_map[self.x + dx][self.y + dy].is_walkable == True:
-            self.x += dx
-            self.y += dy
+    def move(self, dx, dy, objects):
+        new_x = self.x + dx
+        new_y = self.y + dy
+
+        is_floor = (self.current_map[new_x][new_y].is_walkable == True)
+
+        target = None
+
+        for obj in objects:
+            if obj is not self and obj.x == new_x and obj.y == new_y:
+                target = obj
+                break
+
+        if is_floor and target is None:
+            self.x = new_x
+            self.y = new_y
     
 
 class Creature:
@@ -78,7 +105,7 @@ class Game:
         # create entities
         strat_test = Strategy()
 
-        self.player = Actor(0, 0, self.PLAYER_S, self.surface, self.current_map)
+        self.player = Actor(1, 1, self.PLAYER_S, self.surface, self.current_map)
         self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, strat_test)
 
         # create a list of all entities
@@ -101,8 +128,8 @@ class Game:
 
 
     def draw_map(self):
-        for x in range(0, 20):
-            for y in range(0, 20):
+        for x in range(0, MAP_X):
+            for y in range(0, MAP_Y):
                 if self.current_map[x][y].is_walkable == True:
                     self.surface.blit(self.FLOOR_S, (x * CELL_W, y * CELL_H))                    
                 else:
@@ -127,19 +154,19 @@ class Game:
 
                 # movement
                 if event.key == pygame.K_UP:
-                    self.player.move(0, -1)
+                    self.player.move(0, -1, self.entities)
                     return PlayerAction.Move
 
                 if event.key == pygame.K_DOWN:
-                    self.player.move(0, 1)
+                    self.player.move(0, 1, self.entities)
                     return PlayerAction.Move
 
                 if event.key == pygame.K_LEFT:
-                    self.player.move(-1, 0)
+                    self.player.move(-1, 0, self.entities)
                     return PlayerAction.Move
 
                 if event.key == pygame.K_RIGHT:
-                    self.player.move(1, 0)
+                    self.player.move(1, 0, self.entities)
                     return PlayerAction.Move
             
         # no specific key was struck - do nothing
