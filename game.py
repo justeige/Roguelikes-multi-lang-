@@ -38,22 +38,24 @@ class Strategy:
     '''
     This is an ememies strategy/AI for walking, attacking etc.
     '''
-    def take_turn(self):
-        #x, y = random_move()
-        #self.owner.move(x, y)
-        pass
+    def take_turn(self, entities):
+        x, y = random_move()
+        self.owner.move(x, y, entities)
+        #pass
 
 class Actor:
-    def __init__(self, x, y, sprite, surface, current_map, strategy = None):
+    def __init__(self, x, y, sprite, surface, current_map, strategy = None, creature = None):
         self.x = x
         self.y = y
         self.sprite = sprite
         self.surface = surface
         self.current_map = current_map
         self.strategy = strategy
+        self.creature = creature
 
         if strategy:
             strategy.owner = self
+
 
     def draw(self):
         self.surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
@@ -70,17 +72,32 @@ class Actor:
             if obj is not self and obj.x == new_x and obj.y == new_y:
                 target = obj
                 break
+        
+        if target:
+            print(self.creature.name + " hit " + target.creature.name)
+            target.creature.take_dmg(5)
 
         if is_floor and target is None:
             self.x = new_x
             self.y = new_y
     
 
-class Creature:
-    def __init__(self, name, hp = 10):
-        self.name = name 
-        self.hp = hp
 
+
+class Creature:
+    def __init__(self, name, hp = 10, death_handler = None):
+        self.name = name 
+        self.hp = hp # current hp
+        self.max_hp = hp # max available hp
+        self.death_handler = death_handler # how is the death of the creature handled?
+
+    def take_dmg(self, damage):
+        self.hp -= damage
+        print(self.name + " took " + str(damage) + " damage (" + str(self.hp) + "/" + str(self.max_hp) + ")")
+
+        if self.hp <= 0:
+            if self.death_handler is not None:
+                self.death_handler(self)
 
 class PlayerAction(Enum):
     Idle = 0
@@ -104,16 +121,20 @@ class Game:
 
         # create entities
         strat_test = Strategy()
+        devil = Creature("Small devil", 10, self.default_death)
+        human = Creature("Player", 200, self.default_death)
 
-        self.player = Actor(1, 1, self.PLAYER_S, self.surface, self.current_map)
-        self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, strat_test)
+        self.player = Actor(1, 1, self.PLAYER_S, self.surface, self.current_map, None, human)
+        self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, strat_test, devil)
 
         # create a list of all entities
-        self.entities = [self.player, self.enemy]
+        self.actors = [self.player, self.enemy]
 
         pygame.init()
 
-   
+    def default_death(self, entity):
+        print(entity.name + " died!")
+        self.actors.remove(self.enemy) # TODO remove hack!
     
     def draw(self):
 
@@ -121,8 +142,8 @@ class Game:
    
         self.draw_map()
     
-        for e in self.entities:
-            e.draw()
+        for a in self.actors:
+            a.draw()
     
         pygame.display.flip() # update pygame's display
 
@@ -154,19 +175,19 @@ class Game:
 
                 # movement
                 if event.key == pygame.K_UP:
-                    self.player.move(0, -1, self.entities)
+                    self.player.move(0, -1, self.actors)
                     return PlayerAction.Move
 
                 if event.key == pygame.K_DOWN:
-                    self.player.move(0, 1, self.entities)
+                    self.player.move(0, 1, self.actors)
                     return PlayerAction.Move
 
                 if event.key == pygame.K_LEFT:
-                    self.player.move(-1, 0, self.entities)
+                    self.player.move(-1, 0, self.actors)
                     return PlayerAction.Move
 
                 if event.key == pygame.K_RIGHT:
-                    self.player.move(1, 0, self.entities)
+                    self.player.move(1, 0, self.actors)
                     return PlayerAction.Move
             
         # no specific key was struck - do nothing
@@ -184,9 +205,9 @@ class Game:
                 self.is_running = False
 
             if player_action != PlayerAction.Idle:
-                for e in self.entities:
-                    if e.strategy:
-                        e.strategy.take_turn()
+                for a in self.actors:
+                    if a.strategy:
+                        a.strategy.take_turn(self.actors)
 
             self.draw()
     
