@@ -17,6 +17,7 @@ def random_move(step = 1):
 class Tile:
     def __init__(self, is_walkable):
         self.is_walkable = is_walkable
+        self.is_known = False
 
 def create_map():
     new_map = [[ Tile(True) for y in range(0, MAP_Y)] for x in range(0, MAP_X)]
@@ -32,7 +33,25 @@ def create_map():
         new_map[0][y].is_walkable = False
         new_map[MAP_X - 1][y].is_walkable = False
 
-    return new_map
+    fov = create_fov(new_map)
+
+    return (new_map, fov)
+
+def create_fov(game_map):
+    fov = libtcod.map_new(MAP_X, MAP_Y)
+    
+    for y in range(MAP_Y):
+        for x in range(MAP_X):
+
+            is_transparent = game_map[x][y].is_walkable == True # TODO everything that is walkable counts as transparent for now
+            is_walkable = game_map[x][y].is_walkable
+
+            libtcod.map_set_properties(fov, x, y, is_transparent, is_walkable)
+
+    return fov
+
+
+
 
 class Strategy:
     '''
@@ -44,12 +63,13 @@ class Strategy:
         #pass
 
 class Actor:
-    def __init__(self, x, y, sprite, surface, current_map, strategy = None, creature = None):
+    def __init__(self, x, y, sprite, surface, current_map, current_fov, strategy = None, creature = None):
         self.x = x
         self.y = y
         self.sprite = sprite
         self.surface = surface
         self.current_map = current_map
+        self.current_fov = current_fov
         self.strategy = strategy
         self.creature = creature
 
@@ -58,7 +78,9 @@ class Actor:
 
 
     def draw(self):
-        self.surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
+        is_visible = libtcod.map_is_in_fov(self.current_fov, self.x, self.y)
+        if is_visible:
+            self.surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
 
     def move(self, dx, dy, objects):
         new_x = self.x + dx
@@ -111,21 +133,24 @@ class Game:
         self.width = w
         self.heigth = h
         self.surface = pygame.display.set_mode((self.width, self.heigth))
-        self.current_map = create_map()        
+        self.current_map, self.current_fov = create_map()
+        self.new_fov = True
 
         # load sprites
         self.PLAYER_S = pygame.image.load("player.png")
         self.WALL_S = pygame.image.load("wall.png")
         self.FLOOR_S = pygame.image.load("floor.png")
         self.ENEMY_S = pygame.image.load("enemy.png")
+        self.WALL_SHADOW_S = pygame.image.load("wall_shadow.png")
+        self.FLOOR_SHADOW_S = pygame.image.load("floor_shadow.png")
 
         # create entities
         strat_test = Strategy()
         devil = Creature("Small devil", 10, self.default_death)
         human = Creature("Player", 200, self.default_death)
 
-        self.player = Actor(1, 1, self.PLAYER_S, self.surface, self.current_map, None, human)
-        self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, strat_test, devil)
+        self.player = Actor(1, 1, self.PLAYER_S, self.surface, self.current_map, self.current_fov, None, human)
+        self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, self.current_fov, strat_test, devil)
 
         # create a list of all entities
         self.actors = [self.player, self.enemy]
@@ -136,6 +161,14 @@ class Game:
         print(entity.name + " died!")
         self.actors.remove(self.enemy) # TODO remove hack!
     
+    def calculate_new_fov(self):
+        if self.new_fov:
+            self.new_fov = False
+            x, y = self.player.x, self.player.y
+            torch_radius = 10
+            libtcod.map_compute_fov(self.current_fov, x, y, torch_radius, True, libtcod.FOV_BASIC)
+
+
     def draw(self):
 
         self.surface.fill(color.DEFAULT_BG)
@@ -151,10 +184,26 @@ class Game:
     def draw_map(self):
         for x in range(0, MAP_X):
             for y in range(0, MAP_Y):
-                if self.current_map[x][y].is_walkable == True:
-                    self.surface.blit(self.FLOOR_S, (x * CELL_W, y * CELL_H))                    
+
+                is_visible = libtcod.map_is_in_fov(self.current_fov, x, y)
+                is_known = self.current_map[x][y].is_known # tile was explored once
+
+                if is_visible:
+
+                    self.current_map[x][y].is_known = True
+
+                    if self.current_map[x][y].is_walkable == True:
+                        self.surface.blit(self.FLOOR_S, (x * CELL_W, y * CELL_H))                    
+                    else:
+                        self.surface.blit(self.WALL_S, (x * CELL_W, y * CELL_H))
+
                 else:
-                    self.surface.blit(self.WALL_S, (x * CELL_W, y * CELL_H))
+                    if is_known:
+                        if self.current_map[x][y].is_walkable == True:
+                            self.surface.blit(self.FLOOR_SHADOW_S, (x * CELL_W, y * CELL_H))                    
+                        else:
+                            self.surface.blit(self.WALL_SHADOW_S, (x * CELL_W, y * CELL_H))
+
    
 
     def process_input(self):
@@ -194,12 +243,19 @@ class Game:
         return PlayerAction.Idle
 
 
-
     def main_loop(self):
+
+        self.calculate_new_fov()
 
         while self.is_running:
 
             player_action = self.process_input()
+            if player_action == PlayerAction.Move:
+                self.new_fov = True
+            else:
+                self.new_fov = False
+
+            self.calculate_new_fov()
            
             if player_action == PlayerAction.Quit:
                 self.is_running = False
