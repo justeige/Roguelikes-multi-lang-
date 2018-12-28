@@ -4,6 +4,8 @@ import pygame
 
 import color
 
+pygame.font.init()
+DEBUG_FONT = pygame.font.Font(None, 50)
 
 CELL_W = 32
 CELL_H = 32
@@ -13,6 +15,9 @@ MAP_Y = 30
 def random_move(step = 1):
     return (libtcod.random_get_int(0, -step, step), libtcod.random_get_int(0, -step, step))
 
+def create_text_object(text, color):
+    text_surface = DEBUG_FONT.render(text, False, color)
+    return (text_surface, text_surface.get_rect())
 
 class Tile:
     def __init__(self, is_walkable):
@@ -178,6 +183,8 @@ class Game:
         for a in self.actors:
             a.draw()
     
+        self.draw_debug()
+
         pygame.display.flip() # update pygame's display
 
 
@@ -204,7 +211,15 @@ class Game:
                         else:
                             self.surface.blit(self.WALL_SHADOW_S, (x * CELL_W, y * CELL_H))
 
-   
+    def draw_debug(self):
+        self.draw_text(self.surface, "test", (20, 20), color.RED)
+    
+    def draw_text(self, display_surface, text, coords, color):
+        text_surface, text_rect = create_text_object(text, color)
+        text_rect.topleft = coords 
+
+        display_surface.blit(text_surface, text_rect)
+
 
     def process_input(self):
 
@@ -250,11 +265,8 @@ class Game:
         while self.is_running:
 
             player_action = self.process_input()
-            if player_action == PlayerAction.Move:
-                self.new_fov = True
-            else:
-                self.new_fov = False
 
+            self.new_fov = (player_action == PlayerAction.Move)
             self.calculate_new_fov()
            
             if player_action == PlayerAction.Quit:
