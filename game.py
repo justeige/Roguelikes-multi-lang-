@@ -5,7 +5,8 @@ import pygame
 import color
 
 pygame.font.init()
-DEBUG_FONT = pygame.font.Font(None, 50)
+DEBUG_FONT = pygame.font.Font(None, 30)
+DEFAULT_FONT = DEBUG_FONT 
 
 CELL_W = 32
 CELL_H = 32
@@ -15,9 +16,27 @@ MAP_Y = 30
 def random_move(step = 1):
     return (libtcod.random_get_int(0, -step, step), libtcod.random_get_int(0, -step, step))
 
-def create_text_object(text, color):
-    text_surface = DEBUG_FONT.render(text, False, color)
+# TODO refactor into console-class
+def create_text_object(text, color, background_color = None):
+    if background_color:
+        text_surface = DEBUG_FONT.render(text, False, color, background_color)
+    else:
+        text_surface = DEBUG_FONT.render(text, False, color)
+
     return (text_surface, text_surface.get_rect())
+
+# TODO refactor into console-class
+def calc_text_height(font):
+    font_obj = font.render('a', False, (0,0,0))
+    font_rect = font_obj.get_rect()
+    return font_rect.height
+
+# TODO refactor into console-class
+Game_Messages = []
+
+def message(msg, color = color.WHITE):
+    Game_Messages.append((msg, color))
+
 
 class Tile:
     def __init__(self, is_walkable):
@@ -101,7 +120,7 @@ class Actor:
                 break
         
         if target:
-            print(self.creature.name + " hit " + target.creature.name)
+            message(self.creature.name + " hit " + target.creature.name)
             target.creature.take_dmg(5)
 
         if is_floor and target is None:
@@ -120,7 +139,7 @@ class Creature:
 
     def take_dmg(self, damage):
         self.hp -= damage
-        print(self.name + " took " + str(damage) + " damage (" + str(self.hp) + "/" + str(self.max_hp) + ")")
+        message(self.name + " took " + str(damage) + " damage (" + str(self.hp) + "/" + str(self.max_hp) + ")")
 
         if self.hp <= 0:
             if self.death_handler is not None:
@@ -140,6 +159,7 @@ class Game:
         self.surface = pygame.display.set_mode((self.width, self.heigth))
         self.current_map, self.current_fov = create_map()
         self.new_fov = True
+        self.messages = []
 
         # load sprites
         self.PLAYER_S = pygame.image.load("player.png")
@@ -160,10 +180,13 @@ class Game:
         # create a list of all entities
         self.actors = [self.player, self.enemy]
 
+        # create a test message # TODO change!!
+        message('hello world!')
+
         pygame.init()
 
     def default_death(self, entity):
-        print(entity.name + " died!")
+        message(entity.name + " died!")
         self.actors.remove(self.enemy) # TODO remove hack!
     
     def calculate_new_fov(self):
@@ -183,10 +206,22 @@ class Game:
         for a in self.actors:
             a.draw()
     
-        self.draw_debug()
+        #self.draw_debug_text()
+        self.draw_messages()
 
         pygame.display.flip() # update pygame's display
 
+    def draw_messages(self):
+        MAX_MESSAGES = 4
+        to_draw = Game_Messages[-MAX_MESSAGES:] # TODO make this changeable!
+
+        text_height = calc_text_height(DEFAULT_FONT)
+        start_y = self.heigth - (MAX_MESSAGES * text_height)
+
+        i = 0
+        for msg, col in to_draw:            
+            self.draw_text(self.surface, msg, (0, start_y + (i * text_height)), col, color.BLACK)
+            i += 1
 
     def draw_map(self):
         for x in range(0, MAP_X):
@@ -211,11 +246,11 @@ class Game:
                         else:
                             self.surface.blit(self.WALL_SHADOW_S, (x * CELL_W, y * CELL_H))
 
-    def draw_debug(self):
+    def draw_debug_text(self):
         self.draw_text(self.surface, "test", (20, 20), color.RED)
     
-    def draw_text(self, display_surface, text, coords, color):
-        text_surface, text_rect = create_text_object(text, color)
+    def draw_text(self, display_surface, text, coords, text_color, back_color = None):
+        text_surface, text_rect = create_text_object(text, text_color, back_color)
         text_rect.topleft = coords 
 
         display_surface.blit(text_surface, text_rect)
