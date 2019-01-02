@@ -2,11 +2,10 @@ from enum import Enum
 import libtcodpy as libtcod
 import pygame
 
+import console
 import color
 
-pygame.font.init()
-DEBUG_FONT = pygame.font.Font(None, 30)
-DEFAULT_FONT = DEBUG_FONT 
+
 
 CELL_W = 32
 CELL_H = 32
@@ -15,27 +14,6 @@ MAP_Y = 30
 
 def random_move(step = 1):
     return (libtcod.random_get_int(0, -step, step), libtcod.random_get_int(0, -step, step))
-
-# TODO refactor into console-class
-def create_text_object(text, color, background_color = None):
-    if background_color:
-        text_surface = DEBUG_FONT.render(text, False, color, background_color)
-    else:
-        text_surface = DEBUG_FONT.render(text, False, color)
-
-    return (text_surface, text_surface.get_rect())
-
-# TODO refactor into console-class
-def calc_text_height(font):
-    font_obj = font.render('a', False, (0,0,0))
-    font_rect = font_obj.get_rect()
-    return font_rect.height
-
-# TODO refactor into console-class
-Game_Messages = []
-
-def message(msg, color = color.WHITE):
-    Game_Messages.append((msg, color))
 
 
 class Tile:
@@ -86,12 +64,13 @@ class Strategy:
         self.owner.move(x, y, entities)
         #pass
 
+cmd = console.Console(color.BLACK)
+
 class Actor:
-    def __init__(self, x, y, sprite, surface, current_map, current_fov, strategy = None, creature = None):
+    def __init__(self, x, y, sprite, current_map, current_fov, strategy = None, creature = None):
         self.x = x
         self.y = y
         self.sprite = sprite
-        self.surface = surface
         self.current_map = current_map
         self.current_fov = current_fov
         self.strategy = strategy
@@ -101,10 +80,10 @@ class Actor:
             strategy.owner = self
 
 
-    def draw(self):
+    def draw(self, surface):
         is_visible = libtcod.map_is_in_fov(self.current_fov, self.x, self.y)
         if is_visible:
-            self.surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
+            surface.blit(self.sprite, (self.x * CELL_W, self.y * CELL_H))
 
     def move(self, dx, dy, objects):
         new_x = self.x + dx
@@ -120,7 +99,7 @@ class Actor:
                 break
         
         if target:
-            message(self.creature.name + " hit " + target.creature.name)
+            cmd.message(self.creature.name + " hit " + target.creature.name)
             target.creature.take_dmg(5)
 
         if is_floor and target is None:
@@ -139,7 +118,7 @@ class Creature:
 
     def take_dmg(self, damage):
         self.hp -= damage
-        message(self.name + " took " + str(damage) + " damage (" + str(self.hp) + "/" + str(self.max_hp) + ")")
+        cmd.message(self.name + " took " + str(damage) + " damage (" + str(self.hp) + "/" + str(self.max_hp) + ")")
 
         if self.hp <= 0:
             if self.death_handler is not None:
@@ -174,19 +153,19 @@ class Game:
         devil = Creature("Small devil", 10, self.default_death)
         human = Creature("Player", 200, self.default_death)
 
-        self.player = Actor(1, 1, self.PLAYER_S, self.surface, self.current_map, self.current_fov, None, human)
-        self.enemy = Actor(5, 10, self.ENEMY_S, self.surface, self.current_map, self.current_fov, strat_test, devil)
+        self.player = Actor(1, 1, self.PLAYER_S, self.current_map, self.current_fov, None, human)
+        self.enemy = Actor(5, 10, self.ENEMY_S, self.current_map, self.current_fov, strat_test, devil)
 
         # create a list of all entities
         self.actors = [self.player, self.enemy]
 
         # create a test message # TODO change!!
-        message('hello world!')
+        cmd.message('hello world!')
 
         pygame.init()
 
     def default_death(self, entity):
-        message(entity.name + " died!")
+        cmd.message(entity.name + " died!")
         self.actors.remove(self.enemy) # TODO remove hack!
     
     def calculate_new_fov(self):
@@ -204,24 +183,12 @@ class Game:
         self.draw_map()
     
         for a in self.actors:
-            a.draw()
+            a.draw(self.surface)
     
-        #self.draw_debug_text()
-        self.draw_messages()
+        cmd.draw_messages(self.heigth, self.surface)
 
         pygame.display.flip() # update pygame's display
 
-    def draw_messages(self):
-        MAX_MESSAGES = 4
-        to_draw = Game_Messages[-MAX_MESSAGES:] # TODO make this changeable!
-
-        text_height = calc_text_height(DEFAULT_FONT)
-        start_y = self.heigth - (MAX_MESSAGES * text_height)
-
-        i = 0
-        for msg, col in to_draw:            
-            self.draw_text(self.surface, msg, (0, start_y + (i * text_height)), col, color.BLACK)
-            i += 1
 
     def draw_map(self):
         for x in range(0, MAP_X):
@@ -245,15 +212,6 @@ class Game:
                             self.surface.blit(self.FLOOR_SHADOW_S, (x * CELL_W, y * CELL_H))                    
                         else:
                             self.surface.blit(self.WALL_SHADOW_S, (x * CELL_W, y * CELL_H))
-
-    def draw_debug_text(self):
-        self.draw_text(self.surface, "test", (20, 20), color.RED)
-    
-    def draw_text(self, display_surface, text, coords, text_color, back_color = None):
-        text_surface, text_rect = create_text_object(text, text_color, back_color)
-        text_rect.topleft = coords 
-
-        display_surface.blit(text_surface, text_rect)
 
 
     def process_input(self):
