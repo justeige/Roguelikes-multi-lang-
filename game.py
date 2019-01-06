@@ -4,7 +4,7 @@ import pygame
 
 import console
 import color
-
+import world
 
 
 CELL_W = 32
@@ -16,41 +16,7 @@ def random_move(step = 1):
     return (libtcod.random_get_int(0, -step, step), libtcod.random_get_int(0, -step, step))
 
 
-class Tile:
-    def __init__(self, is_walkable):
-        self.is_walkable = is_walkable
-        self.is_known = False
 
-def create_map():
-    new_map = [[ Tile(True) for y in range(0, MAP_Y)] for x in range(0, MAP_X)]
-    new_map[10][10].is_walkable = False
-    new_map[10][15].is_walkable = False
-
-    # create a border around a screen
-    for x in range(MAP_X):
-        new_map[x][0].is_walkable = False
-        new_map[x][MAP_Y - 1].is_walkable = False
-
-    for y in range(MAP_Y):
-        new_map[0][y].is_walkable = False
-        new_map[MAP_X - 1][y].is_walkable = False
-
-    fov = create_fov(new_map)
-
-    return (new_map, fov)
-
-def create_fov(game_map):
-    fov = libtcod.map_new(MAP_X, MAP_Y)
-    
-    for y in range(MAP_Y):
-        for x in range(MAP_X):
-
-            is_transparent = game_map[x][y].is_walkable == True # TODO everything that is walkable counts as transparent for now
-            is_walkable = game_map[x][y].is_walkable
-
-            libtcod.map_set_properties(fov, x, y, is_transparent, is_walkable)
-
-    return fov
 
 
 
@@ -136,7 +102,8 @@ class Game:
         self.width = w
         self.heigth = h
         self.surface = pygame.display.set_mode((self.width, self.heigth))
-        self.current_map, self.current_fov = create_map()
+        self.world = world.World(MAP_X, MAP_Y)
+        self.current_map, self.current_fov = self.world.create_map()
         self.new_fov = True
         self.messages = []
 
